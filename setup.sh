@@ -288,7 +288,7 @@ enabled = true
 port = ssh
 filter = sshd
 logpath = /var/log/auth.log
-maxretry = 3
+maxretry = 5
 findtime = 600
 bantime = 3600
 EOF
@@ -309,7 +309,7 @@ enabled = true
 port = ssh
 filter = sshd
 logpath = /var/log/auth.log
-maxretry = 3
+maxretry = 5
 action = ufw-ssh
 EOF
     
