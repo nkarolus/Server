@@ -181,6 +181,8 @@ main() {
     else
         info "Benutzer wird erstellt..."
         useradd -m -s /bin/bash "${USERNAME}"
+        # Stelle sicher, dass Home-Verzeichnis korrekte Permissions hat
+        chmod 755 "/home/${USERNAME}"
         success "Benutzer ${USERNAME} erstellt"
     fi
     step_complete
@@ -191,12 +193,20 @@ main() {
     
     SSH_DIR="/home/${USERNAME}/.ssh"
     mkdir -p "${SSH_DIR}"
-    chmod 700 "${SSH_DIR}"
     
     if curl -sf "https://github.com/${GITHUB_USERNAME}.keys" -o "${SSH_DIR}/authorized_keys"; then
-        chmod 600 "${SSH_DIR}/authorized_keys"
+        # Wichtig: chown VOR chmod für korrekte Permissions
         chown -R "${USERNAME}:${USERNAME}" "${SSH_DIR}"
-        success "SSH-Keys erfolgreich importiert"
+        chmod 700 "${SSH_DIR}"
+        chmod 600 "${SSH_DIR}/authorized_keys"
+        
+        # Verifiziere Permissions
+        if [[ $(stat -c %a "${SSH_DIR}") == "700" ]] && [[ $(stat -c %a "${SSH_DIR}/authorized_keys") == "600" ]]; then
+            success "SSH-Keys erfolgreich importiert"
+        else
+            error "SSH-Permissions nicht korrekt gesetzt!"
+            exit 1
+        fi
     else
         error "Fehler beim Abrufen der SSH-Keys"
         warning "Prüfe GitHub Username: ${GITHUB_USERNAME}"
@@ -320,6 +330,17 @@ EOF
     # SSH Keys Check
     if [ -f "${SSH_DIR}/authorized_keys" ] && [ -s "${SSH_DIR}/authorized_keys" ]; then
         success "SSH-Keys sind konfiguriert"
+        
+        # Überprüfe SSH-Permissions
+        SSH_DIR_PERMS=$(stat -c %a "${SSH_DIR}")
+        AUTH_KEYS_PERMS=$(stat -c %a "${SSH_DIR}/authorized_keys")
+        SSH_DIR_OWNER=$(stat -c %U "${SSH_DIR}")
+        
+        if [[ "$SSH_DIR_PERMS" == "700" ]] && [[ "$AUTH_KEYS_PERMS" == "600" ]] && [[ "$SSH_DIR_OWNER" == "$USERNAME" ]]; then
+            success "SSH-Permissions korrekt (.ssh: 700, authorized_keys: 600)"
+        else
+            warning "SSH-Permissions: .ssh=$SSH_DIR_PERMS, authorized_keys=$AUTH_KEYS_PERMS, owner=$SSH_DIR_OWNER"
+        fi
     else
         error "SSH-Keys nicht gefunden"
     fi
